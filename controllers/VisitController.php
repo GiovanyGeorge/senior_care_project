@@ -76,6 +76,18 @@ class VisitController
             $this->notificationModel->create($palUserId, 'New Visit Request', 'A new visit request is waiting for your response.');
         }
 
+        // Notify all linked proxies when a senior requests a service (except the actor if they are proxy).
+        $proxyUserIds = (new User())->getProxyUserIdsForSeniorId((int)$seniorId);
+        foreach ($proxyUserIds as $proxyUserId) {
+            if ($proxyUserId > 0 && $proxyUserId !== $actorUserId) {
+                $this->notificationModel->create(
+                    $proxyUserId,
+                    'Senior Requested Service',
+                    'A linked senior requested a new service. Visit #' . $visitId . ' is pending.'
+                );
+            }
+        }
+
         $_SESSION['success'] = 'Visit requested. Points reserved in escrow.';
         header('Location: /senior_care/views/senior/dashboard.php');
         exit();

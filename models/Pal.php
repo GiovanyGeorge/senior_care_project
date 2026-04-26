@@ -60,8 +60,8 @@ class Pal
              JOIN service_categories sc ON sc.category_ID = vr.category_ID
              LEFT JOIN health_records hr ON hr.senior_ID = sp.senior_ID
              WHERE pp.User_ID = :pal_user_id
-             AND vr.status IN ('Accepted', 'En_Route', 'Live', 'Pending')
-             AND vr.scheduled_start >= NOW()
+             AND vr.status IN ('Accepted', 'En_Route', 'Live', 'Pending', 'Completed')
+             AND vr.scheduled_start >= DATE_SUB(NOW(), INTERVAL 12 HOUR)
              ORDER BY vr.scheduled_start ASC"
         );
         $stmt->execute(['pal_user_id' => $palUserId]);

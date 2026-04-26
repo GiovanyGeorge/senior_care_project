@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 $isGuestLayout = !isset($_SESSION['role']);
+$isProxyTheme = isset($_SESSION['role']) && ($_SESSION['role'] === 'FamilyProxy');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -15,4 +16,4 @@ $isGuestLayout = !isset($_SESSION['role']);
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/senior_care/public/css/style.css">
 </head>
-<body class="<?= $isGuestLayout ? 'guest-layout' : 'app-layout' ?>">
+<body class="<?= $isGuestLayout ? 'guest-layout' : 'app-layout' ?><?= $isProxyTheme ? ' proxy-theme' : '' ?>">

@@ -25,7 +25,10 @@ require_once __DIR__ . '/../layouts/navbar.php';
             <p class="text-muted mb-0">No upcoming scheduled visits.</p>
         <?php else: ?>
             <?php foreach ($schedule as $visit): ?>
-                <?php $status = (string)($visit['status'] ?? 'Pending'); ?>
+                <?php
+                $status = (string)($visit['status'] ?? 'Pending');
+                $statusKey = strtolower(trim($status));
+                ?>
                 <div class="visit-item">
                     <div class="visit-avatar"><?= strtoupper(substr((string)($visit['senior_first_name'] ?? 'S'), 0, 1)) ?></div>
                     <div class="visit-info">
@@ -49,13 +52,21 @@ require_once __DIR__ . '/../layouts/navbar.php';
                     </div>
                     <div class="d-flex flex-column align-items-end gap-2">
                         <span class="status-badge status-pending"><?= htmlspecialchars($status) ?></span>
-                        <?php if ($status === 'Accepted'): ?>
+
+                        <?php if ($statusKey === 'pending'): ?>
                             <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus">
                                 <input type="hidden" name="visit_id" value="<?= (int)$visit['visit_ID'] ?>">
-                                <input type="hidden" name="status" value="Live">
+                                <input type="hidden" name="status" value="Accepted">
                                 <input type="hidden" name="return_to" value="/senior_care/views/pal/schedule.php">
-                                <button class="btn btn-sm btn-primary" type="submit">Start Service</button>
+                                <button class="btn btn-sm btn-primary" type="submit">Accept</button>
                             </form>
+                            <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus">
+                                <input type="hidden" name="visit_id" value="<?= (int)$visit['visit_ID'] ?>">
+                                <input type="hidden" name="status" value="Rejected">
+                                <input type="hidden" name="return_to" value="/senior_care/views/pal/schedule.php">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Reject</button>
+                            </form>
+                            <a class="btn btn-sm btn-outline-primary" href="/senior_care/views/pal/report_visit.php?visit_id=<?= (int)$visit['visit_ID'] ?>">Write Report</a>
                             <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus" onsubmit="return confirm('Cancel this service?');">
                                 <input type="hidden" name="visit_id" value="<?= (int)$visit['visit_ID'] ?>">
                                 <input type="hidden" name="status" value="Cancelled">
@@ -63,7 +74,23 @@ require_once __DIR__ . '/../layouts/navbar.php';
                                 <input type="hidden" name="reason" value="Cancelled by pal from schedule.">
                                 <button class="btn btn-sm btn-danger" type="submit">Cancel</button>
                             </form>
-                        <?php elseif ($status === 'Live' || $status === 'En_Route'): ?>
+
+                        <?php elseif ($statusKey === 'accepted' || $statusKey === 'confirmed'): ?>
+                            <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus">
+                                <input type="hidden" name="visit_id" value="<?= (int)$visit['visit_ID'] ?>">
+                                <input type="hidden" name="status" value="Live">
+                                <input type="hidden" name="return_to" value="/senior_care/views/pal/schedule.php">
+                                <button class="btn btn-sm btn-primary" type="submit">Start Service</button>
+                            </form>
+                            <a class="btn btn-sm btn-outline-primary" href="/senior_care/views/pal/report_visit.php?visit_id=<?= (int)$visit['visit_ID'] ?>">Write Report</a>
+                            <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus" onsubmit="return confirm('Cancel this service?');">
+                                <input type="hidden" name="visit_id" value="<?= (int)$visit['visit_ID'] ?>">
+                                <input type="hidden" name="status" value="Cancelled">
+                                <input type="hidden" name="return_to" value="/senior_care/views/pal/schedule.php">
+                                <input type="hidden" name="reason" value="Cancelled by pal from schedule.">
+                                <button class="btn btn-sm btn-danger" type="submit">Cancel</button>
+                            </form>
+                        <?php elseif ($statusKey === 'live' || $statusKey === 'en_route' || $statusKey === 'en route'): ?>
                             <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus">
                                 <input type="hidden" name="visit_id" value="<?= (int)$visit['visit_ID'] ?>">
                                 <input type="hidden" name="status" value="Completed">
@@ -78,6 +105,8 @@ require_once __DIR__ . '/../layouts/navbar.php';
                                 <input type="hidden" name="reason" value="Cancelled by pal during service.">
                                 <button class="btn btn-sm btn-danger" type="submit">Cancel</button>
                             </form>
+                        <?php elseif ($statusKey === 'completed'): ?>
+                            <a class="btn btn-sm btn-outline-primary" href="/senior_care/views/pal/report_visit.php?visit_id=<?= (int)$visit['visit_ID'] ?>">Write Report</a>
                         <?php endif; ?>
                     </div>
                 </div>

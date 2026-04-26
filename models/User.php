@@ -345,6 +345,41 @@ class User
         return $row ?: null;
     }
 
+    public function getProxyLinkedSeniors(int $proxyUserId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT psl.senior_ID, sp.User_ID AS senior_user_id, u.Fname, u.Lname, u.email, psl.relationship_type
+             FROM proxy_senior_link psl
+             JOIN senior_profiles sp ON sp.senior_ID = psl.senior_ID
+             JOIN users u ON u.User_ID = sp.User_ID
+             WHERE psl.proxyUser_ID = :proxy_user_id
+             ORDER BY u.Fname ASC, u.Lname ASC"
+        );
+        $stmt->execute(['proxy_user_id' => $proxyUserId]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    public function getProxyUserIdsForSeniorId(int $seniorId): array
+    {
+        $stmt = $this->db->prepare('SELECT proxyUser_ID FROM proxy_senior_link WHERE senior_ID = :senior_id');
+        $stmt->execute(['senior_id' => $seniorId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return array_values(array_unique(array_map('intval', $rows ?: [])));
+    }
+
+    public function updateBasicProfile(int $userId, array $data): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE users SET Fname = :fname, Lname = :lname, phone = :phone WHERE User_ID = :user_id'
+        );
+        return $stmt->execute([
+            'fname' => $data['first_name'],
+            'lname' => $data['last_name'],
+            'phone' => $data['phone'],
+            'user_id' => $userId,
+        ]);
+    }
+
     public function updateSeniorProfileByUserId(int $userId, array $data): bool
     {
         $this->db->beginTransaction();

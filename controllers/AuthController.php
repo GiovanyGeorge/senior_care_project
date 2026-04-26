@@ -67,24 +67,28 @@ class AuthController
         }
 
         if ($_SESSION['role'] === 'FamilyProxy') {
-            $linked = $this->userModel->getProxyLinkedSenior((int)$user['User_ID']);
-            if (!$linked) {
+            $linkedList = $this->userModel->getProxyLinkedSeniors((int)$user['User_ID']);
+            if (!$linkedList) {
                 session_destroy();
                 session_start();
                 $_SESSION['error'] = 'Proxy account is not linked to a senior yet. Please contact admin.';
                 header('Location: /senior_care/views/auth/login.php');
                 exit();
             }
-            $_SESSION['proxy_senior_id'] = (int)$linked['senior_ID'];
-            $_SESSION['proxy_senior_user_id'] = (int)$linked['senior_user_id'];
-            $_SESSION['proxy_senior_name'] = trim((string)$linked['Fname'] . ' ' . (string)$linked['Lname']);
-            if ((int)$linked['senior_user_id'] > 0) {
-                $this->userModel->ensureSeniorProfile((int)$linked['senior_user_id']);
+            $_SESSION['proxy_seniors'] = $linkedList;
+            $active = $linkedList[0];
+            $_SESSION['proxy_senior_id'] = (int)$active['senior_ID'];
+            $_SESSION['proxy_senior_user_id'] = (int)$active['senior_user_id'];
+            $_SESSION['proxy_senior_name'] = trim((string)$active['Fname'] . ' ' . (string)$active['Lname']);
+            if ((int)$active['senior_user_id'] > 0) {
+                $this->userModel->ensureSeniorProfile((int)$active['senior_user_id']);
             }
         }
 
-        if ($_SESSION['role'] === 'Senior' || $_SESSION['role'] === 'FamilyProxy') {
+        if ($_SESSION['role'] === 'Senior') {
             header('Location: /senior_care/views/senior/dashboard.php');
+        } elseif ($_SESSION['role'] === 'FamilyProxy') {
+            header('Location: /senior_care/views/proxy/dashboard.php');
         } elseif ($_SESSION['role'] === 'Pal') {
             header('Location: /senior_care/views/pal/dashboard.php');
         } else {

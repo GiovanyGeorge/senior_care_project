@@ -59,7 +59,7 @@ function navActive(string $path, string $current): string
             </div>
         </div>
         <nav class="nav flex-column">
-            <?php if ($role === 'Senior' || $role === 'FamilyProxy'): ?>
+            <?php if ($role === 'Senior'): ?>
                 <a class="nav-link<?= navActive('/views/senior/dashboard.php', $current) ?>" href="/senior_care/views/senior/dashboard.php"><i class="fa-solid fa-house"></i>Dashboard</a>
                 <a class="nav-link<?= navActive('/views/senior/book_visit.php', $current) ?>" href="/senior_care/views/senior/book_visit.php"><i class="fa-solid fa-calendar-plus"></i>Book Visit</a>
                 <a class="nav-link<?= navActive('/views/senior/visit_history.php', $current) ?>" href="/senior_care/views/senior/visit_history.php"><i class="fa-solid fa-clock-rotate-left"></i>My Visits</a>
@@ -67,6 +67,13 @@ function navActive(string $path, string $current): string
                 <a class="nav-link<?= navActive('/views/shared/messages.php', $current) ?>" href="/senior_care/views/shared/messages.php"><i class="fa-solid fa-bell"></i>Notifications<?php if ($notifCount > 0): ?> (<?= $notifCount ?>)<?php endif; ?></a>
                 <a class="nav-link<?= navActive('/views/senior/profile.php', $current) ?>" href="/senior_care/views/senior/profile.php"><i class="fa-solid fa-user"></i>Profile</a>
                 <a class="nav-link" href="/senior_care/views/senior/panic.php"><i class="fa-solid fa-triangle-exclamation"></i>Panic</a>
+            <?php elseif ($role === 'FamilyProxy'): ?>
+                <a class="nav-link<?= navActive('/views/proxy/dashboard.php', $current) ?>" href="/senior_care/views/proxy/dashboard.php"><i class="fa-solid fa-house"></i>Dashboard</a>
+                <a class="nav-link<?= navActive('/views/senior/book_visit.php', $current) ?>" href="/senior_care/views/senior/book_visit.php"><i class="fa-solid fa-gift"></i>Gift a Service</a>
+                <a class="nav-link<?= navActive('/views/senior/visit_history.php', $current) ?>" href="/senior_care/views/senior/visit_history.php"><i class="fa-solid fa-clock-rotate-left"></i>Senior Visits</a>
+                <a class="nav-link<?= navActive('/views/senior/wallet.php', $current) ?>" href="/senior_care/views/senior/wallet.php"><i class="fa-solid fa-star"></i>My SilverPoints</a>
+                <a class="nav-link<?= navActive('/views/shared/messages.php', $current) ?>" href="/senior_care/views/shared/messages.php"><i class="fa-solid fa-bell"></i>Notifications<?php if ($notifCount > 0): ?> (<?= $notifCount ?>)<?php endif; ?></a>
+                <a class="nav-link<?= navActive('/views/proxy/profile.php', $current) ?>" href="/senior_care/views/proxy/profile.php"><i class="fa-solid fa-id-card"></i>Proxy Profile</a>
             <?php elseif ($role === 'Pal'): ?>
                 <a class="nav-link<?= navActive('/views/pal/dashboard.php', $current) ?>" href="/senior_care/views/pal/dashboard.php"><i class="fa-solid fa-house"></i>Dashboard</a>
                 <a class="nav-link<?= navActive('/views/pal/requests.php', $current) ?>" href="/senior_care/views/pal/requests.php"><i class="fa-solid fa-inbox"></i>Requests</a>
@@ -91,7 +98,7 @@ function navActive(string $path, string $current): string
     </aside>
     <div class="main-content">
         <div class="topbar">
-            <div class="topbar-title"><?= htmlspecialchars((string)($role === 'FamilyProxy' ? 'Family Proxy' : $role)) ?></div>
+            <div class="topbar-title"><?= htmlspecialchars((string)($role === 'FamilyProxy' ? 'Proxy' : $role)) ?></div>
             <div class="d-flex align-items-center gap-3">
                 <?php if ($silverPoints !== null): ?>
                     <div class="badge text-bg-warning px-3 py-2">

@@ -35,6 +35,7 @@ require_once __DIR__ . '/../layouts/navbar.php';
                         <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus">
                             <input type="hidden" name="visit_id" value="<?= (int)$request['visit_ID'] ?>">
                             <input type="hidden" name="status" value="Accepted">
+                            <input type="hidden" name="return_to" value="/senior_care/views/pal/schedule.php">
                             <button class="btn btn-primary" type="submit">Accept</button>
                         </form>
                         <form method="POST" action="/senior_care/controllers/PalController.php?action=updateRequestStatus">

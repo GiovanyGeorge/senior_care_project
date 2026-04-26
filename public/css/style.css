@@ -44,6 +44,24 @@ body {
     z-index: 100;
 }
 
+/* Proxy theme overrides (set body class `proxy-theme`) */
+body.proxy-theme .sidebar {
+    background: linear-gradient(180deg, #1E5148 0%, #133a33 100%);
+}
+
+body.proxy-theme .sidebar-brand span {
+    color: #E8B89A;
+}
+
+body.proxy-theme .sidebar .nav-link:hover,
+body.proxy-theme .sidebar .nav-link.active {
+    border-left: 4px solid #E8B89A;
+}
+
+body.proxy-theme .welcome-banner {
+    background: linear-gradient(135deg, #1E5148 0%, #2F6F61 100%);
+}
+
 .sidebar-brand {
     padding: 24px 20px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
