@@ -2,13 +2,14 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../models/Visit.php';
-require_once __DIR__ . '/../models/Notification.php';
 require_once __DIR__ . '/../models/Points.php';
 require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/BackgroundCheck.php';
 require_once __DIR__ . '/../models/Pal.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/events.php';
+require_once __DIR__ . '/../patterns/State/VisitStateRegistry.php';
 
 class PalController
 {
@@ -30,15 +31,54 @@ class PalController
             exit();
         }
 
-        if ($status === 'Cancelled') {
-            $ok = $visitModel->cancelVisit($visitId, $reason !== '' ? $reason : 'Cancelled by pal.');
-        } else {
-            $ok = $visitModel->setStatus($visitId, $status);
+        $currentStatus = $visitModel->getStatus($visitId);
+        $isCancel = strcasecmp((string)$status, 'Cancelled') === 0;
+        $isAccept = strcasecmp((string)$status, 'Accepted') === 0;
+
+        if ($isAccept) {
+            $visit = $visitModel->getVisitForCancel($visitId);
+            if (!$visit) {
+                $_SESSION['error'] = 'Visit not found.';
+                header('Location: ' . $returnTo);
+                exit();
+            }
+
+            $scheduledAt = (string)($visit['scheduled_start'] ?? '');
+            $palId = (int)($visit['pal_ID'] ?? 0);
+            $scheduledEnd = (string)($visit['scheduled_end'] ?? '');
+            $durationHours = 1.0;
+            if ($scheduledAt !== '' && $scheduledEnd !== '') {
+                try {
+                    $startDt = new DateTime($scheduledAt);
+                    $endDt = new DateTime($scheduledEnd);
+                    $minutes = max(0, (int)(($endDt->getTimestamp() - $startDt->getTimestamp()) / 60));
+                    $durationHours = max($minutes / 60, 1.0);
+                } catch (Throwable $e) {
+                    $durationHours = 1.0;
+                }
+            }
+
+            if ($scheduledAt === '' || $palId <= 0 || !$visitModel->canPalTakeVisitOnDate($palId, $scheduledAt, $durationHours, $visitId)) {
+                $maxHours = $palId > 0 ? $visitModel->getPalMaxDailyHours($palId) : 8;
+                $_SESSION['error'] = 'You reached your daily limit (' . $maxHours . ' hours) for that date.';
+                header('Location: ' . $returnTo);
+                exit();
+            }
         }
-        if ($ok && $status === 'Completed') {
+
+        if ($isCancel) {
+            if ($currentStatus === null || !VisitStateRegistry::canCancel($currentStatus)) {
+                $ok = false;
+            } else {
+                $ok = $visitModel->cancelVisit($visitId, $reason !== '' ? $reason : 'Cancelled by pal.');
+            }
+        } else {
+            $ok = $visitModel->applyStatusTransition($visitId, $status);
+        }
+        if ($ok && strcasecmp((string)$status, 'Completed') === 0) {
             $this->settleVisitPayout($visitId);
         }
-        if ($ok && $status === 'Cancelled') {
+        if ($ok && $isCancel) {
             $this->settleCancellation($visitId);
         }
 
@@ -213,7 +253,6 @@ class PalController
     {
         $visitModel = new Visit();
         $pointsModel = new Points();
-        $notificationModel = new Notification();
         $db = Database::getInstance()->getConnection();
 
         $visit = $visitModel->getVisitSettlementData($visitId);
@@ -255,8 +294,10 @@ class PalController
             return;
         }
 
-        $notificationModel->create($palUserId, 'Payout Completed', 'Your service payout was added to your SilverPoints balance.');
-        $notificationModel->create($seniorUserId, 'Visit Completed', 'Your visit has been completed successfully.');
+        EventDispatcher::getInstance()->dispatch(new DomainEvent(AppEvents::VISIT_PAYOUT_COMPLETED, [
+            'pal_user_id' => $palUserId,
+            'senior_user_id' => $seniorUserId,
+        ]));
     }
 }
 
@@ -269,7 +310,6 @@ class VisitControllerShim
     {
         $db = Database::getInstance()->getConnection();
         $pointsModel = new Points();
-        $notificationModel = new Notification();
 
         $visitId = (int)$visit['visit_ID'];
         $reserved = (int)round((float)($visit['points_reserved'] ?? 0));
@@ -310,10 +350,12 @@ class VisitControllerShim
             }
         }
 
-        if ($palUserId > 0) {
-            $notificationModel->create($palUserId, 'Service Cancelled', 'You cancelled a service.');
-        }
-        $notificationModel->create($seniorUserId, 'Service Cancelled', 'A pal cancelled your service.');
+        EventDispatcher::getInstance()->dispatch(new DomainEvent(AppEvents::VISIT_CANCELLED, [
+            'visit_id' => $visitId,
+            'pal_user_id' => $palUserId,
+            'senior_user_id' => $seniorUserId,
+            'cancelled_by' => 'pal',
+        ]));
     }
 }
 

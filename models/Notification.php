@@ -51,4 +51,14 @@ class Notification
             'user_id' => $userId,
         ]);
     }
+
+    public function markAllAsRead(int $userId): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE notifications
+             SET is_read = 1, read_at = NOW()
+             WHERE usersUser_ID = :user_id AND is_read = 0'
+        );
+        return $stmt->execute(['user_id' => $userId]);
+    }
 }

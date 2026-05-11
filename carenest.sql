@@ -654,6 +654,85 @@ ALTER TABLE `visit_requests`
   ADD CONSTRAINT `visit_requests_ibfk_2` FOREIGN KEY (`pal_ID`) REFERENCES `pal_profiles` (`pal_ID`),
   ADD CONSTRAINT `visit_requests_ibfk_3` FOREIGN KEY (`proxy_ID`) REFERENCES `users` (`User_ID`),
   ADD CONSTRAINT `visit_requests_ibfk_4` FOREIGN KEY (`category_ID`) REFERENCES `service_categories` (`category_ID`);
+
+-- --------------------------------------------------------
+-- App schema extensions (formerly separate sql/*.sql files)
+-- Safe to re-run on MariaDB 10.4+ (IF NOT EXISTS / IF NOT EXISTS indexes)
+-- --------------------------------------------------------
+
+ALTER TABLE `users`
+  ADD COLUMN IF NOT EXISTS `age` int(10) DEFAULT NULL AFTER `phone`,
+  ADD COLUMN IF NOT EXISTS `national_id` varchar(30) DEFAULT NULL AFTER `age`;
+
+ALTER TABLE `users`
+  ADD UNIQUE KEY IF NOT EXISTS `uq_users_national_id` (`national_id`);
+
+ALTER TABLE `pal_profiles`
+  ADD COLUMN IF NOT EXISTS `max_daily_hours` int(10) NOT NULL DEFAULT 8 AFTER `transport_mode`;
+
+ALTER TABLE `service_categories`
+  ADD COLUMN IF NOT EXISTS `max_duration_hours` int(10) NOT NULL DEFAULT 4 AFTER `base_points_cost`;
+
+CREATE TABLE IF NOT EXISTS `proxy_profiles` (
+  `proxy_profile_ID` int(10) NOT NULL AUTO_INCREMENT,
+  `User_ID` int(10) NOT NULL,
+  `relationship_notes` varchar(255) DEFAULT NULL,
+  `preferred_contact_method` varchar(50) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp(),
+  PRIMARY KEY (`proxy_profile_ID`),
+  UNIQUE KEY `uq_proxy_profiles_user` (`User_ID`),
+  CONSTRAINT `fk_proxy_profiles_user` FOREIGN KEY (`User_ID`) REFERENCES `users` (`User_ID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `background_checks` (
+  `check_ID` int(10) NOT NULL AUTO_INCREMENT,
+  `pal_ID` int(10) NOT NULL,
+  `badge_ID` int(10) DEFAULT NULL,
+  `check_type` varchar(50) NOT NULL DEFAULT 'SkillBadge',
+  `status` varchar(30) NOT NULL DEFAULT 'Pending',
+  `reviewer_user_ID` int(10) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `reviewed_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`check_ID`),
+  KEY `idx_background_checks_pal` (`pal_ID`),
+  KEY `idx_background_checks_status` (`status`),
+  CONSTRAINT `fk_background_checks_pal` FOREIGN KEY (`pal_ID`) REFERENCES `pal_profiles` (`pal_ID`) ON DELETE CASCADE,
+  CONSTRAINT `fk_background_checks_badge` FOREIGN KEY (`badge_ID`) REFERENCES `skill_badges` (`badge_ID`) ON DELETE SET NULL,
+  CONSTRAINT `fk_background_checks_reviewer` FOREIGN KEY (`reviewer_user_ID`) REFERENCES `users` (`User_ID`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `escrow_holds` (
+  `escrow_ID` int(10) NOT NULL AUTO_INCREMENT,
+  `visit_ID` int(10) NOT NULL,
+  `user_ID` int(10) NOT NULL,
+  `points_amount` decimal(10,2) NOT NULL,
+  `hold_status` varchar(30) NOT NULL DEFAULT 'Held',
+  `released_at` datetime DEFAULT NULL,
+  `release_reason` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`escrow_ID`),
+  KEY `idx_escrow_visit` (`visit_ID`),
+  KEY `idx_escrow_user` (`user_ID`),
+  CONSTRAINT `fk_escrow_visit` FOREIGN KEY (`visit_ID`) REFERENCES `visit_requests` (`visit_ID`) ON DELETE CASCADE,
+  CONSTRAINT `fk_escrow_user` FOREIGN KEY (`user_ID`) REFERENCES `users` (`User_ID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `visit_reports` (
+  `report_ID` int(10) NOT NULL AUTO_INCREMENT,
+  `visit_ID` int(10) NOT NULL,
+  `pal_user_ID` int(10) NOT NULL,
+  `summary` varchar(255) DEFAULT NULL,
+  `report_text` text NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`report_ID`),
+  KEY `visit_ID` (`visit_ID`),
+  KEY `pal_user_ID` (`pal_user_ID`),
+  CONSTRAINT `visit_reports_ibfk_1` FOREIGN KEY (`visit_ID`) REFERENCES `visit_requests` (`visit_ID`) ON DELETE CASCADE,
+  CONSTRAINT `visit_reports_ibfk_2` FOREIGN KEY (`pal_user_ID`) REFERENCES `users` (`User_ID`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

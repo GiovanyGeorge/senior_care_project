@@ -84,6 +84,9 @@ function navActive(string $path, string $current): string
             <?php elseif ($role === 'Admin'): ?>
                 <a class="nav-link<?= navActive('/views/admin/dashboard.php', $current) ?>" href="/senior_care/views/admin/dashboard.php"><i class="fa-solid fa-gauge-high"></i>Dashboard</a>
                 <a class="nav-link<?= navActive('/views/admin/users.php', $current) ?>" href="/senior_care/views/admin/users.php"><i class="fa-solid fa-users"></i>Users</a>
+                <a class="nav-link<?= navActive('/views/admin/services.php', $current) ?>" href="/senior_care/views/admin/services.php"><i class="fa-solid fa-briefcase-medical"></i>Services</a>
+                <a class="nav-link<?= navActive('/views/admin/background_checks.php', $current) ?>" href="/senior_care/views/admin/background_checks.php"><i class="fa-solid fa-user-check"></i>Background Checks</a>
+                <a class="nav-link<?= navActive('/views/admin/skill_badges.php', $current) ?>" href="/senior_care/views/admin/skill_badges.php"><i class="fa-solid fa-certificate"></i>Skill Badges</a>
                 <a class="nav-link<?= navActive('/views/admin/visits.php', $current) ?>" href="/senior_care/views/admin/visits.php"><i class="fa-solid fa-list-check"></i>Visits</a>
                 <a class="nav-link<?= navActive('/views/admin/reports.php', $current) ?>" href="/senior_care/views/admin/reports.php"><i class="fa-solid fa-file-lines"></i>Reports</a>
                 <a class="nav-link<?= navActive('/views/admin/broadcasts.php', $current) ?>" href="/senior_care/views/admin/broadcasts.php"><i class="fa-solid fa-bullhorn"></i>Broadcasts</a>

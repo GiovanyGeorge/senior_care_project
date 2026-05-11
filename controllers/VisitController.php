@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../models/Visit.php';
 require_once __DIR__ . '/../models/Points.php';
-require_once __DIR__ . '/../models/Notification.php';
 require_once __DIR__ . '/../models/User.php';
+require_once __DIR__ . '/../models/Notification.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/events.php';
+require_once __DIR__ . '/../patterns/State/VisitStateRegistry.php';
 
 class VisitController
 {
@@ -43,6 +45,7 @@ class VisitController
         $palId = (int)($_POST['pal_user_id'] ?? $_POST['pal_id'] ?? 0);
         $scheduledAt = $_POST['scheduled_at'] ?? $_POST['scheduled_start'] ?? date('Y-m-d H:i:s');
         $taskDescription = trim($_POST['task_description'] ?? $_POST['task_details'] ?? '');
+        $durationHours = (int)($_POST['duration_hours'] ?? 1);
 
         if ($seniorId === null) {
             // Auto-create missing senior profile to avoid blocking bookings.
@@ -59,6 +62,20 @@ class VisitController
             exit();
         }
 
+        $maxServiceHours = $this->visitModel->getServiceMaxDurationHours($categoryId);
+        if ($durationHours <= 0 || $durationHours > $maxServiceHours) {
+            $_SESSION['error'] = 'This service allows maximum ' . $maxServiceHours . ' hours.';
+            header('Location: /senior_care/views/senior/book_visit.php');
+            exit();
+        }
+
+        if (!$this->visitModel->canPalTakeVisitOnDate($palId, (string)$scheduledAt, (float)$durationHours, null)) {
+            $maxHours = $this->visitModel->getPalMaxDailyHours($palId);
+            $_SESSION['error'] = 'Selected pal reached the daily limit (' . $maxHours . ' hours). Please choose another time or pal.';
+            header('Location: /senior_care/views/senior/book_visit.php');
+            exit();
+        }
+
         $visitId = $this->visitModel->createVisit([
             'senior_user_id' => $seniorId,
             'pal_user_id' => $palId,
@@ -66,11 +83,13 @@ class VisitController
             'proxy_id' => $role === 'FamilyProxy' ? $actorUserId : null,
             'request_type' => $role === 'FamilyProxy' ? 'Proxy' : 'Direct',
             'scheduled_at' => $scheduledAt,
+            'duration_hours' => $durationHours,
             'task_description' => $taskDescription,
             'points_reserved' => $cost,
         ]);
 
         $this->pointsModel->addLedgerEntry($payerUserId, $cost, 'debit', 'Points reserved in escrow', $visitId);
+        $this->createEscrowHold($visitId, $payerUserId, $cost);
         $palUserId = $this->visitModel->getPalUserIdByPalId($palId);
         if ($palUserId !== null) {
             $this->notificationModel->create($palUserId, 'New Visit Request', 'A new visit request is waiting for your response.');
@@ -114,6 +133,12 @@ class VisitController
             exit();
         }
 
+        if (!VisitStateRegistry::canCancel((string)($visit['status'] ?? ''))) {
+            $_SESSION['error'] = 'This visit cannot be cancelled.';
+            header('Location: ' . $returnTo);
+            exit();
+        }
+
         $ok = $this->visitModel->cancelVisit($visitId, $reason);
         if (!$ok) {
             $_SESSION['error'] = 'Unable to cancel service.';
@@ -132,7 +157,6 @@ class VisitController
     {
         $db = Database::getInstance()->getConnection();
         $pointsModel = $this->pointsModel;
-        $notificationModel = $this->notificationModel;
 
         $visitId = (int)$visit['visit_ID'];
         $reserved = (int)round((float)($visit['points_reserved'] ?? 0));
@@ -179,10 +203,30 @@ class VisitController
             }
         }
 
-        if ($palUserId > 0) {
-            $notificationModel->create($palUserId, 'Service Cancelled', 'A scheduled service was cancelled.');
+        EventDispatcher::getInstance()->dispatch(new DomainEvent(AppEvents::VISIT_CANCELLED, [
+            'visit_id' => $visitId,
+            'pal_user_id' => $palUserId,
+            'senior_user_id' => $seniorUserId,
+            'cancelled_by' => $cancelledBy,
+        ]));
+    }
+
+    private function createEscrowHold(int $visitId, int $userId, int $points): void
+    {
+        try {
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare(
+                "INSERT INTO escrow_holds (visit_ID, user_ID, points_amount, hold_status, created_at)
+                 VALUES (:visit_id, :user_id, :points_amount, 'Held', NOW())"
+            );
+            $stmt->execute([
+                'visit_id' => $visitId,
+                'user_id' => $userId,
+                'points_amount' => $points,
+            ]);
+        } catch (Throwable $e) {
+            // Keep booking flow running even if escrow table is not migrated yet.
         }
-        $notificationModel->create($seniorUserId, 'Service Cancelled', 'Your service was cancelled.');
     }
 }
 

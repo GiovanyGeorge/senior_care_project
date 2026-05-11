@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../models/User.php';
 require_once __DIR__ . '/../models/Points.php';
+require_once __DIR__ . '/../models/BackgroundCheck.php';
 require_once __DIR__ . '/../config/auth.php';
 
 class AuthController
@@ -42,10 +43,11 @@ class AuthController
     public function login(): void
     {
         $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
+        $password = (string)($_POST['password'] ?? '');
+        $passwordTrimmed = trim($password);
 
         $user = $this->userModel->findByEmail($email);
-        if (!$user || !password_verify($password, $user['password_hash'])) {
+        if (!$user || !$this->verifyPasswordWithLegacySupport($password, $passwordTrimmed, (string)($user['password_hash'] ?? ''), (int)$user['User_ID'])) {
             $_SESSION['error'] = 'Invalid email or password.';
             header('Location: /senior_care/views/auth/login.php');
             exit();
@@ -97,11 +99,43 @@ class AuthController
         exit();
     }
 
+    private function verifyPasswordWithLegacySupport(string $rawPassword, string $trimmedPassword, string $storedHash, int $userId): bool
+    {
+        $storedHash = trim($storedHash);
+        if ($storedHash === '') {
+            return false;
+        }
+
+        // Preferred modern hash.
+        if (password_verify($rawPassword, $storedHash) || password_verify($trimmedPassword, $storedHash)) {
+            return true;
+        }
+
+        // Legacy fallback for older seeded/imported accounts.
+        $legacyMatched =
+            hash_equals($storedHash, $rawPassword) ||
+            hash_equals($storedHash, $trimmedPassword) ||
+            hash_equals($storedHash, md5($rawPassword)) ||
+            hash_equals($storedHash, md5($trimmedPassword)) ||
+            hash_equals($storedHash, sha1($rawPassword)) ||
+            hash_equals($storedHash, sha1($trimmedPassword));
+
+        if (!$legacyMatched) {
+            return false;
+        }
+
+        // Auto-upgrade legacy password format to bcrypt.
+        $this->userModel->changePassword($userId, password_hash($trimmedPassword, PASSWORD_BCRYPT));
+        return true;
+    }
+
     public function register(): void
     {
         $role = $this->mapFormRoleToDb($_POST['role'] ?? 'Senior');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
+        $nationalId = trim((string)($_POST['national_id'] ?? ''));
+        $age = (int)($_POST['age'] ?? 0);
 
         if ($this->userModel->emailExists($email)) {
             $_SESSION['error'] = 'This email is already registered. Please use another email.';
@@ -111,6 +145,22 @@ class AuthController
 
         if ($phone !== '' && $this->userModel->phoneExists($phone)) {
             $_SESSION['error'] = 'This phone number is already registered. Please use another phone number.';
+            header('Location: /senior_care/views/auth/register.php');
+            exit();
+        }
+
+        if ($nationalId === '') {
+            $_SESSION['error'] = 'National ID is required.';
+            header('Location: /senior_care/views/auth/register.php');
+            exit();
+        }
+        if ($this->userModel->nationalIdExists($nationalId)) {
+            $_SESSION['error'] = 'This national ID is already registered.';
+            header('Location: /senior_care/views/auth/register.php');
+            exit();
+        }
+        if ($age <= 0 || $age > 120) {
+            $_SESSION['error'] = 'Please enter a valid age.';
             header('Location: /senior_care/views/auth/register.php');
             exit();
         }
@@ -128,6 +178,8 @@ class AuthController
                 'password' => password_hash($_POST['password'] ?? '', PASSWORD_BCRYPT),
                 'phone' => $phone,
                 'role' => $role,
+                'age' => $age,
+                'national_id' => $nationalId,
                 'is_active' => 0,
                 'profile_photo' => $photoPath,
             ]);
@@ -138,6 +190,8 @@ class AuthController
                     $_SESSION['error'] = 'This email is already registered. Please use another email.';
                 } elseif (stripos($driverMessage, "for key 'phone'") !== false) {
                     $_SESSION['error'] = 'This phone number is already registered. Please use another phone number.';
+                } elseif (stripos($driverMessage, "for key 'national_id'") !== false) {
+                    $_SESSION['error'] = 'This national ID is already registered.';
                 } else {
                     $_SESSION['error'] = 'This account data already exists. Please change email/phone.';
                 }
@@ -172,7 +226,40 @@ class AuthController
         }
 
         if ($role === 'senior') {
+            $seniorId = $this->userModel->ensureSeniorProfile($userId);
+            $this->userModel->updateSeniorRegistrationDetails($userId, [
+                'address' => trim((string)($_POST['address'] ?? '')),
+                'comfort_profile' => trim((string)($_POST['comfort_profile'] ?? '')),
+                'emergency_contact_name' => trim((string)($_POST['emergency_contact_name'] ?? '')),
+                'emergency_contact_phone' => trim((string)($_POST['emergency_contact_phone'] ?? '')),
+            ]);
+            $medicalNotes = trim((string)($_POST['medical_notes'] ?? ''));
+            $allergies = trim((string)($_POST['allergies'] ?? ''));
+            $this->userModel->upsertHealthRecord($seniorId, $medicalNotes, $allergies);
             $this->grantSeniorWelcomeBonus($userId);
+        }
+
+        if ($role === 'pal') {
+            $palId = $this->userModel->ensurePalProfile($userId);
+            $skills = trim((string)($_POST['pal_skills'] ?? ''));
+            if ($skills !== '') {
+                $this->userModel->updatePalProfileByUserId($userId, [
+                    'first_name' => trim($_POST['first_name'] ?? ''),
+                    'last_name' => trim($_POST['last_name'] ?? ''),
+                    'phone' => $phone,
+                    'skills' => $skills,
+                    'travel_radius_km' => 5,
+                    'transport_mode' => 'Walking',
+                ]);
+            }
+
+            if (isset($_FILES['pal_certificate']) && ($_FILES['pal_certificate']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $certPath = $this->handleUploadTo($_FILES['pal_certificate'], __DIR__ . '/../uploads/badges/', '/senior_care/uploads/badges/');
+                if ($certPath !== null) {
+                    $badgeName = trim((string)($_POST['pal_badge_name'] ?? 'General Care Certification'));
+                    (new BackgroundCheck())->submitSkillBadge($palId, $badgeName, null, null, $certPath);
+                }
+            }
         }
 
         $this->notifyAdminsForApproval($userId, trim($_POST['first_name'] ?? '') . ' ' . trim($_POST['last_name'] ?? ''), $role);
@@ -236,6 +323,27 @@ class AuthController
         }
 
         return '/senior_care/uploads/profiles/' . $tempName;
+    }
+
+    private function handleUploadTo(array $file, string $targetDir, string $publicPrefix): ?string
+    {
+        if (($file['size'] ?? 0) > 5 * 1024 * 1024) {
+            return null;
+        }
+        $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+        $ext = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed, true)) {
+            return null;
+        }
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+        $name = uniqid('doc_', true) . '.' . $ext;
+        $target = rtrim($targetDir, '/\\') . DIRECTORY_SEPARATOR . $name;
+        if (!move_uploaded_file($file['tmp_name'], $target)) {
+            return null;
+        }
+        return rtrim($publicPrefix, '/\\') . '/' . $name;
     }
 
     private function grantSeniorWelcomeBonus(int $userId): void

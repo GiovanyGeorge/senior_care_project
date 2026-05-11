@@ -44,4 +44,57 @@ class Admin
         );
         return $stmt->fetchAll();
     }
+
+    public function getAllServices(): array
+    {
+        $stmt = $this->db->query(
+            'SELECT category_ID, category_name, base_points_cost, max_duration_hours, is_active
+             FROM service_categories
+             ORDER BY category_ID DESC'
+        );
+        return $stmt->fetchAll();
+    }
+
+    public function createService(string $name, int $cost, int $maxDurationHours, int $isActive): bool
+    {
+        $stmt = $this->db->prepare(
+            'INSERT INTO service_categories (category_name, base_points_cost, max_duration_hours, is_active)
+             VALUES (:name, :cost, :max_duration_hours, :is_active)'
+        );
+        return $stmt->execute([
+            'name' => $name,
+            'cost' => $cost,
+            'max_duration_hours' => $maxDurationHours,
+            'is_active' => $isActive,
+        ]);
+    }
+
+    public function updateService(int $categoryId, string $name, int $cost, int $maxDurationHours, int $isActive): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE service_categories
+             SET category_name = :name, base_points_cost = :cost, max_duration_hours = :max_duration_hours, is_active = :is_active
+             WHERE category_ID = :category_id'
+        );
+        return $stmt->execute([
+            'name' => $name,
+            'cost' => $cost,
+            'max_duration_hours' => $maxDurationHours,
+            'is_active' => $isActive,
+            'category_id' => $categoryId,
+        ]);
+    }
+
+    public function isServiceUsedInVisits(int $categoryId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM visit_requests WHERE category_ID = :category_id LIMIT 1');
+        $stmt->execute(['category_id' => $categoryId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function deleteService(int $categoryId): bool
+    {
+        $stmt = $this->db->prepare('DELETE FROM service_categories WHERE category_ID = :category_id');
+        return $stmt->execute(['category_id' => $categoryId]);
+    }
 }

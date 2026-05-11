@@ -12,8 +12,16 @@ require_once __DIR__ . '/../layouts/navbar.php';
 ?>
 <div class="container py-4">
     <div class="card">
-        <h3>Notifications</h3>
-        <p class="text-muted">Latest admin alerts and account approval requests.</p>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h3 class="mb-1">Notifications</h3>
+                <p class="text-muted mb-0">Latest admin alerts and account approval requests.</p>
+            </div>
+            <form method="POST" action="/senior_care/controllers/NotificationController.php?action=markAllRead">
+                <input type="hidden" name="return_to" value="/senior_care/views/admin/notifications.php">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Read All</button>
+            </form>
+        </div>
         <?php if (empty($notifications)): ?>
             <p class="mb-0">No notifications yet.</p>
         <?php else: ?>
@@ -26,9 +34,10 @@ require_once __DIR__ . '/../layouts/navbar.php';
                             <small class="text-muted"><?= htmlspecialchars((string)$note['created_at']) ?></small>
                         </div>
                         <?php if ((int)$note['is_read'] === 0): ?>
-                            <form method="POST" action="/senior_care/controllers/AdminController.php?action=markNotificationRead">
+                            <form method="POST" action="/senior_care/controllers/NotificationController.php?action=markRead">
                                 <input type="hidden" name="notification_id" value="<?= (int)$note['notification_ID'] ?>">
-                                <button class="btn btn-sm btn-primary" type="submit">Mark as read</button>
+                                <input type="hidden" name="return_to" value="/senior_care/views/admin/notifications.php">
+                                <button class="btn btn-sm btn-primary" type="submit">Read</button>
                             </form>
                         <?php else: ?>
                             <span class="badge text-bg-secondary">Read</span>

@@ -25,7 +25,7 @@ class ReportController
         try {
             $reportId = (new Report())->create($visitId, $palUserId, $summary, $reportText);
         } catch (Throwable $e) {
-            $_SESSION['error'] = 'Unable to submit report. Make sure the table `visit_reports` exists (run sql/create_visit_reports.sql).';
+            $_SESSION['error'] = 'Unable to submit report. Ensure the `visit_reports` table exists (import `carenest.sql` or its extension section).';
             header('Location: /senior_care/views/pal/report_visit.php?visit_id=' . $visitId);
             exit();
         }

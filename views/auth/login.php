@@ -28,7 +28,12 @@ require_once __DIR__ . '/../layouts/navbar.php';
                     </div>
                     <div class="mb-4 text-start">
                         <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" required>
+                        <div class="input-group">
+                            <input id="login-password" type="password" name="password" class="form-control" required>
+                            <button class="btn btn-outline-secondary" type="button" id="toggle-login-password" aria-label="Show password">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <button class="btn btn-primary w-100" type="submit">Login</button>
                 </form>
@@ -62,3 +67,17 @@ require_once __DIR__ . '/../layouts/navbar.php';
     </div>
 </div>
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+<script>
+    (function () {
+        const input = document.getElementById('login-password');
+        const button = document.getElementById('toggle-login-password');
+        if (!input || !button) return;
+        button.addEventListener('click', function () {
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            this.innerHTML = isHidden
+                ? '<i class="fa-solid fa-eye-slash"></i>'
+                : '<i class="fa-solid fa-eye"></i>';
+        });
+    })();
+</script>

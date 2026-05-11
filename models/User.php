@@ -34,6 +34,26 @@ class User
         return (bool)$stmt->fetchColumn();
     }
 
+    public function emailExistsForOther(string $email, int $excludeUserId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM users WHERE email = :email AND User_ID <> :exclude_id LIMIT 1');
+        $stmt->execute([
+            'email' => $email,
+            'exclude_id' => $excludeUserId,
+        ]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function phoneExistsForOther(string $phone, int $excludeUserId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM users WHERE phone = :phone AND User_ID <> :exclude_id LIMIT 1');
+        $stmt->execute([
+            'phone' => $phone,
+            'exclude_id' => $excludeUserId,
+        ]);
+        return (bool)$stmt->fetchColumn();
+    }
+
     public function findById(int $id): ?array
     {
         $stmt = $this->db->prepare('SELECT * FROM users WHERE User_ID = :id LIMIT 1');
@@ -45,8 +65,8 @@ class User
     public function create(array $data): int
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO users (Fname, Lname, email, password_hash, phone, role_type, profile_photo_url, is_active, created_at)
-             VALUES (:first_name, :last_name, :email, :password, :phone, :role, :profile_photo, :is_active, NOW())'
+            'INSERT INTO users (Fname, Lname, email, password_hash, phone, role_type, age, national_id, profile_photo_url, is_active, created_at)
+             VALUES (:first_name, :last_name, :email, :password, :phone, :role, :age, :national_id, :profile_photo, :is_active, NOW())'
         );
 
         $stmt->execute([
@@ -56,6 +76,8 @@ class User
             'password' => $data['password'],
             'phone' => $data['phone'],
             'role' => $data['role'],
+            'age' => $data['age'] ?? null,
+            'national_id' => $data['national_id'] ?? null,
             'profile_photo' => $data['profile_photo'] ?? null,
             'is_active' => $data['is_active'] ?? 1,
         ]);
@@ -90,11 +112,28 @@ class User
     public function getUsersForManagement(): array
     {
         $stmt = $this->db->query(
-            'SELECT User_ID, Fname, Lname, email, role_type, phone, is_active, created_at
+            'SELECT User_ID, Fname, Lname, email, role_type, phone, age, national_id, is_active, created_at
              FROM users
              ORDER BY created_at DESC'
         );
         return $stmt->fetchAll();
+    }
+
+    public function nationalIdExists(string $nationalId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM users WHERE national_id = :national_id LIMIT 1');
+        $stmt->execute(['national_id' => $nationalId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function nationalIdExistsForOther(string $nationalId, int $excludeUserId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM users WHERE national_id = :national_id AND User_ID <> :exclude_id LIMIT 1');
+        $stmt->execute([
+            'national_id' => $nationalId,
+            'exclude_id' => $excludeUserId,
+        ]);
+        return (bool)$stmt->fetchColumn();
     }
 
     public function setUserActiveStatus(int $userId, int $isActive): bool
@@ -146,10 +185,28 @@ class User
             $this->db->prepare('DELETE FROM notifications WHERE usersUser_ID = :user_id')->execute(['user_id' => $userId]);
             $this->db->prepare('DELETE FROM silverpoints_ledger WHERE User_ID = :user_id')->execute(['user_id' => $userId]);
             $this->db->prepare('DELETE FROM emergency_message WHERE sender_user_ID = :user_id')->execute(['user_id' => $userId]);
+            // If the user owns emergency threads, remove their messages first then threads.
+            $this->db->prepare(
+                'DELETE em FROM emergency_message em
+                 INNER JOIN emergency_threads et ON et.thread_ID = em.emergency_ID
+                 WHERE et.user_ID = :user_id'
+            )->execute(['user_id' => $userId]);
+            $this->db->prepare('DELETE FROM emergency_threads WHERE user_ID = :user_id')->execute(['user_id' => $userId]);
             $this->db->prepare('DELETE FROM admin_broadcasts WHERE admin_ID = :user_id')->execute(['user_id' => $userId]);
             $this->db->prepare('DELETE FROM proxy_senior_link WHERE proxyUser_ID = :user_id')->execute(['user_id' => $userId]);
+            try {
+                $this->db->prepare('DELETE FROM escrow_holds WHERE user_ID = :user_id')->execute(['user_id' => $userId]);
+            } catch (Throwable $e) {
+                // Table may not exist before migration.
+            }
+            try {
+                $this->db->prepare('DELETE FROM proxy_profiles WHERE User_ID = :user_id')->execute(['user_id' => $userId]);
+            } catch (Throwable $e) {
+                // Table may not exist before migration.
+            }
 
             // Remove visits where user acted as proxy.
+            $this->deleteVisitDependenciesByClause('vr.proxy_ID = :proxy_user_id', ['proxy_user_id' => $userId]);
             $this->db->prepare('DELETE FROM visit_requests WHERE proxy_ID = :user_id')->execute(['user_id' => $userId]);
 
             if ($seniorId !== null) {
@@ -234,6 +291,11 @@ class User
                 $this->db->prepare('DELETE FROM cashout_requests WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
                 $this->db->prepare('DELETE FROM cashout_destinations WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
                 $this->db->prepare('DELETE FROM skill_badges WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
+                try {
+                    $this->db->prepare('DELETE FROM background_checks WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
+                } catch (Throwable $e) {
+                    // Table may not exist before migration.
+                }
                 $this->db->prepare('DELETE FROM pal_passed_requests WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
                 $this->db->prepare('DELETE FROM ratings WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
                 $this->db->prepare('DELETE FROM pal_profiles WHERE pal_ID = :pal_id')->execute(['pal_id' => $palId]);
@@ -249,6 +311,54 @@ class User
                 $this->db->rollBack();
             }
             throw $e;
+        }
+    }
+
+    private function deleteVisitDependenciesByClause(string $visitWhereSql, array $params): void
+    {
+        $queries = [
+            // Messages inside emergency threads linked to target visits.
+            'DELETE em FROM emergency_message em
+             INNER JOIN emergency_threads et ON et.thread_ID = em.emergency_ID
+             INNER JOIN visit_requests vr ON vr.visit_ID = et.visit_ID
+             WHERE ' . $visitWhereSql,
+
+            // Emergency threads linked to target visits.
+            'DELETE et FROM emergency_threads et
+             INNER JOIN visit_requests vr ON vr.visit_ID = et.visit_ID
+             WHERE ' . $visitWhereSql,
+
+            // Pal pass history linked to target visits.
+            'DELETE ppr FROM pal_passed_requests ppr
+             INNER JOIN visit_requests vr ON vr.visit_ID = ppr.visit_ID
+             WHERE ' . $visitWhereSql,
+
+            // Ratings linked to target visits.
+            'DELETE r FROM ratings r
+             INNER JOIN visit_requests vr ON vr.visit_ID = r.visit_ID
+             WHERE ' . $visitWhereSql,
+
+            // Ledger records linked to target visits.
+            'DELETE sl FROM silverpoints_ledger sl
+             INNER JOIN visit_requests vr ON vr.visit_ID = sl.visit_ID
+             WHERE ' . $visitWhereSql,
+        ];
+
+        foreach ($queries as $sql) {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+        }
+
+        // Optional escrow table from newer migration.
+        try {
+            $escrow = $this->db->prepare(
+                'DELETE eh FROM escrow_holds eh
+                 INNER JOIN visit_requests vr ON vr.visit_ID = eh.visit_ID
+                 WHERE ' . $visitWhereSql
+            );
+            $escrow->execute($params);
+        } catch (Throwable $e) {
+            // Table may not exist before migration.
         }
     }
 
@@ -286,6 +396,41 @@ class User
         return (int)$this->db->lastInsertId();
     }
 
+    public function ensurePalProfile(int $palUserId): int
+    {
+        $stmt = $this->db->prepare('SELECT pal_ID FROM pal_profiles WHERE User_ID = :user_id LIMIT 1');
+        $stmt->execute(['user_id' => $palUserId]);
+        $existing = $stmt->fetchColumn();
+        if ($existing !== false) {
+            return (int)$existing;
+        }
+
+        $insert = $this->db->prepare(
+            "INSERT INTO pal_profiles (User_ID, skills, verification_status, rating_avg, travel_radius_km, transport_mode)
+             VALUES (:user_id, NULL, 'Pending', 0, 5, 'Walking')"
+        );
+        $insert->execute(['user_id' => $palUserId]);
+        return (int)$this->db->lastInsertId();
+    }
+
+    public function setPalVerificationStatusByUserId(int $palUserId, string $status): bool
+    {
+        $allowed = ['Pending', 'Approved', 'Rejected'];
+        if (!in_array($status, $allowed, true)) {
+            return false;
+        }
+
+        $stmt = $this->db->prepare(
+            'UPDATE pal_profiles
+             SET verification_status = :status
+             WHERE User_ID = :user_id'
+        );
+        return $stmt->execute([
+            'status' => $status,
+            'user_id' => $palUserId,
+        ]);
+    }
+
     public function upsertHealthRecord(int $seniorId, string $medicalNotes, string $allergies): bool
     {
         $stmt = $this->db->prepare('SELECT 1 FROM health_records WHERE senior_ID = :senior_id LIMIT 1');
@@ -313,6 +458,25 @@ class User
             'senior_id' => $seniorId,
             'medical_notes' => $medicalNotes !== '' ? $medicalNotes : null,
             'allergies' => $allergies !== '' ? $allergies : null,
+        ]);
+    }
+
+    public function updateSeniorRegistrationDetails(int $userId, array $data): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE senior_profiles
+             SET address = :address,
+                 comfort_profile = :comfort_profile,
+                 emergency_contact_name = :ec_name,
+                 emergency_contact_phone = :ec_phone
+             WHERE User_ID = :user_id'
+        );
+        return $stmt->execute([
+            'address' => $data['address'] !== '' ? $data['address'] : null,
+            'comfort_profile' => $data['comfort_profile'] !== '' ? $data['comfort_profile'] : null,
+            'ec_name' => $data['emergency_contact_name'] !== '' ? $data['emergency_contact_name'] : null,
+            'ec_phone' => $data['emergency_contact_phone'] !== '' ? $data['emergency_contact_phone'] : null,
+            'user_id' => $userId,
         ]);
     }
 
@@ -376,6 +540,33 @@ class User
             'fname' => $data['first_name'],
             'lname' => $data['last_name'],
             'phone' => $data['phone'],
+            'user_id' => $userId,
+        ]);
+    }
+
+    public function updateUserByAdmin(int $userId, array $data): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE users
+             SET Fname = :first_name,
+                 Lname = :last_name,
+                 email = :email,
+                 phone = :phone,
+                 age = :age,
+                 national_id = :national_id,
+                 role_type = :role_type,
+                 is_active = :is_active
+             WHERE User_ID = :user_id'
+        );
+        return $stmt->execute([
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'],
+            'age' => $data['age'],
+            'national_id' => $data['national_id'],
+            'role_type' => $data['role_type'],
+            'is_active' => $data['is_active'],
             'user_id' => $userId,
         ]);
     }
@@ -451,5 +642,55 @@ class User
             }
             return false;
         }
+    }
+
+    public function getUserFullSnapshot(int $userId): ?array
+    {
+        $userStmt = $this->db->prepare('SELECT * FROM users WHERE User_ID = :user_id LIMIT 1');
+        $userStmt->execute(['user_id' => $userId]);
+        $user = $userStmt->fetch();
+        if (!$user) {
+            return null;
+        }
+
+        $seniorStmt = $this->db->prepare('SELECT * FROM senior_profiles WHERE User_ID = :user_id LIMIT 1');
+        $seniorStmt->execute(['user_id' => $userId]);
+        $senior = $seniorStmt->fetch() ?: null;
+
+        $palStmt = $this->db->prepare('SELECT * FROM pal_profiles WHERE User_ID = :user_id LIMIT 1');
+        $palStmt->execute(['user_id' => $userId]);
+        $pal = $palStmt->fetch() ?: null;
+
+        $proxy = null;
+        try {
+            $proxyStmt = $this->db->prepare('SELECT * FROM proxy_profiles WHERE User_ID = :user_id LIMIT 1');
+            $proxyStmt->execute(['user_id' => $userId]);
+            $proxy = $proxyStmt->fetch() ?: null;
+        } catch (Throwable $e) {
+            $proxy = null;
+        }
+
+        $health = null;
+        if (!empty($senior['senior_ID'])) {
+            $healthStmt = $this->db->prepare('SELECT * FROM health_records WHERE senior_ID = :senior_id LIMIT 1');
+            $healthStmt->execute(['senior_id' => (int)$senior['senior_ID']]);
+            $health = $healthStmt->fetch() ?: null;
+        }
+
+        $badges = [];
+        if (!empty($pal['pal_ID'])) {
+            $badgeStmt = $this->db->prepare('SELECT * FROM skill_badges WHERE pal_ID = :pal_id ORDER BY badge_ID DESC');
+            $badgeStmt->execute(['pal_id' => (int)$pal['pal_ID']]);
+            $badges = $badgeStmt->fetchAll();
+        }
+
+        return [
+            'user' => $user,
+            'senior_profile' => $senior,
+            'pal_profile' => $pal,
+            'proxy_profile' => $proxy,
+            'health_record' => $health,
+            'skill_badges' => $badges,
+        ];
     }
 }

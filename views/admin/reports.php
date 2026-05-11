@@ -9,7 +9,7 @@ try {
     $reports = (new Report())->getAll(300);
 } catch (Throwable $e) {
     $reports = [];
-    $_SESSION['error'] = 'Reports table missing. Run sql/create_visit_reports.sql';
+    $_SESSION['error'] = 'Reports table missing. Import `carenest.sql` (includes `visit_reports`).';
 }
 
 require_once __DIR__ . '/../layouts/header.php';

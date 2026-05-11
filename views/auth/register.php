@@ -33,11 +33,24 @@ require_once __DIR__ . '/../layouts/header.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" required>
+                            <div class="input-group">
+                                <input id="register-password" type="password" name="password" class="form-control" required>
+                                <button class="btn btn-outline-secondary" type="button" id="toggle-register-password" aria-label="Show password">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Phone</label>
                             <input type="text" name="phone" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Age</label>
+                            <input type="number" name="age" min="1" max="120" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">National ID</label>
+                            <input type="text" name="national_id" class="form-control" maxlength="30" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
@@ -76,6 +89,56 @@ require_once __DIR__ . '/../layouts/header.php';
                                 <small class="text-muted d-block mt-2">If the senior isn’t listed yet, ask them to register first (or admin can add them).</small>
                             </div>
                         </div>
+                        <div class="col-12" id="senior-health-block">
+                            <div class="card" style="background: var(--bg-secondary);">
+                                <h5 class="mb-2">Senior Details</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Address</label>
+                                        <input type="text" class="form-control" name="address" placeholder="Home address">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Comfort Profile</label>
+                                        <input type="text" class="form-control" name="comfort_profile" placeholder="Preferences, routines, mobility comfort">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Emergency Contact Name</label>
+                                        <input type="text" class="form-control" name="emergency_contact_name" placeholder="Contact person">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Emergency Contact Phone</label>
+                                        <input type="text" class="form-control" name="emergency_contact_phone" placeholder="Emergency phone">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Medical Notes</label>
+                                        <textarea class="form-control" name="medical_notes" rows="3" placeholder="Chronic conditions, medications, mobility notes..."></textarea>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Allergies</label>
+                                        <textarea class="form-control" name="allergies" rows="3" placeholder="Food, medicine, environmental allergies..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12" id="pal-skills-block" style="display:none;">
+                            <div class="card" style="background: var(--bg-secondary);">
+                                <h5 class="mb-2">Pal Skills & Certificate</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Skills</label>
+                                        <textarea class="form-control" name="pal_skills" rows="3" placeholder="Companionship, medication reminder, mobility support..."></textarea>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Skill Badge Name</label>
+                                        <input type="text" name="pal_badge_name" class="form-control" placeholder="e.g. First Aid Certified">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Certificate File</label>
+                                        <input type="file" name="pal_certificate" class="form-control" accept=".jpg,.jpeg,.png,.pdf">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="col-12">
                             <label class="form-label">Profile Photo</label>
                             <input type="file" name="profile_photo" class="form-control" accept=".jpg,.jpeg,.png,.pdf">
@@ -94,14 +157,33 @@ require_once __DIR__ . '/../layouts/header.php';
         const role = document.getElementById('role');
         const block = document.getElementById('proxy-senior-block');
         const select = document.getElementById('linked_senior_user_id');
+        const seniorHealthBlock = document.getElementById('senior-health-block');
+        const palBlock = document.getElementById('pal-skills-block');
+        const registerPassword = document.getElementById('register-password');
+        const toggleRegisterPassword = document.getElementById('toggle-register-password');
 
         function sync() {
-            const isProxy = role && role.value === 'FamilyProxy';
+            const roleValue = role ? role.value : 'Senior';
+            const isProxy = roleValue === 'FamilyProxy';
+            const isSenior = roleValue === 'Senior';
+            const isPal = roleValue === 'Pal';
             if (block) block.style.display = isProxy ? '' : 'none';
             if (select) select.required = !!isProxy;
+            if (seniorHealthBlock) seniorHealthBlock.style.display = isSenior ? '' : 'none';
+            if (palBlock) palBlock.style.display = isPal ? '' : 'none';
         }
 
         if (role) role.addEventListener('change', sync);
         sync();
+
+        if (registerPassword && toggleRegisterPassword) {
+            toggleRegisterPassword.addEventListener('click', function () {
+                const isHidden = registerPassword.type === 'password';
+                registerPassword.type = isHidden ? 'text' : 'password';
+                this.innerHTML = isHidden
+                    ? '<i class="fa-solid fa-eye-slash"></i>'
+                    : '<i class="fa-solid fa-eye"></i>';
+            });
+        }
     })();
 </script>

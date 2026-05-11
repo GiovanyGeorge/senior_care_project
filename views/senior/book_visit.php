@@ -12,7 +12,7 @@ $targetSeniorUserId = $role === 'FamilyProxy'
     ? (int)($_SESSION['proxy_senior_user_id'] ?? 0)
     : $actorUserId;
 
-$catStmt = $db->query("SELECT category_ID, category_name, base_points_cost FROM service_categories WHERE is_active = 1 ORDER BY category_name");
+$catStmt = $db->query("SELECT category_ID, category_name, base_points_cost, max_duration_hours FROM service_categories WHERE is_active = 1 ORDER BY category_name");
 $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $seniorStmt = $db->prepare(
@@ -85,11 +85,16 @@ require_once __DIR__ . '/../layouts/navbar.php';
                 <select id="category_id" name="category_id" class="form-select" required>
                     <option value="">Select Service</option>
                     <?php foreach ($categories as $category): ?>
-                        <option value="<?= (int)$category['category_ID'] ?>" data-cost="<?= (int)$category['base_points_cost'] ?>">
+                        <option value="<?= (int)$category['category_ID'] ?>" data-cost="<?= (int)$category['base_points_cost'] ?>" data-max-hours="<?= (int)($category['max_duration_hours'] ?? 4) ?>">
                             <?= htmlspecialchars($category['category_name']) ?> (<?= (int)$category['base_points_cost'] ?> points)
                         </option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Duration (Hours)</label>
+                <input id="duration_hours" class="form-control" type="number" name="duration_hours" min="1" max="4" value="1" required>
+                <small id="duration-help" class="text-muted">Maximum allowed for selected service: 4 hours.</small>
             </div>
             <div class="mb-3">
                 <label class="form-label">Date and Time</label>
@@ -120,3 +125,27 @@ require_once __DIR__ . '/../layouts/navbar.php';
 </div>
 <a class="panic-btn-fixed" href="/senior_care/views/senior/panic.php"><i class="fa-solid fa-triangle-exclamation"></i> Panic</a>
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+<script>
+    (function () {
+        const category = document.getElementById('category_id');
+        const duration = document.getElementById('duration_hours');
+        const help = document.getElementById('duration-help');
+
+        function syncDurationLimit() {
+            if (!category || !duration) return;
+            const selected = category.options[category.selectedIndex];
+            const maxHours = parseInt(selected?.getAttribute('data-max-hours') || '4', 10);
+            const safeMax = Number.isFinite(maxHours) && maxHours > 0 ? maxHours : 4;
+            duration.max = String(safeMax);
+            if (parseInt(duration.value || '1', 10) > safeMax) {
+                duration.value = String(safeMax);
+            }
+            if (help) {
+                help.textContent = 'Maximum allowed for selected service: ' + safeMax + ' hours.';
+            }
+        }
+
+        if (category) category.addEventListener('change', syncDurationLimit);
+        syncDurationLimit();
+    })();
+</script>

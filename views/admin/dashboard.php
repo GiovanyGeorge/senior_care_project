@@ -24,6 +24,9 @@ require_once __DIR__ . '/../layouts/navbar.php';
         <h4>Quick Links</h4>
         <div class="d-flex flex-wrap gap-2">
             <a class="btn btn-primary" href="/senior_care/views/admin/users.php">Manage Users</a>
+            <a class="btn btn-primary" href="/senior_care/views/admin/services.php">Manage Services</a>
+            <a class="btn btn-primary" href="/senior_care/views/admin/background_checks.php">Background Checks</a>
+            <a class="btn btn-primary" href="/senior_care/views/admin/skill_badges.php">Skill Badges</a>
             <a class="btn btn-primary" href="/senior_care/views/admin/visits.php">Manage Visits</a>
             <a class="btn btn-primary" href="/senior_care/views/admin/broadcasts.php">Broadcasts</a>
             <a class="btn btn-primary" href="/senior_care/views/admin/notifications.php">Notifications</a>
